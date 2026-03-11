@@ -1,114 +1,96 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TG-Catalog — Каталог Telegram-каналов организаций</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+    <title>TG-Catalog</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <nav class="navbar">
-        <a href="/" class="nav-logo">📡 TG-Catalog</a>
-        <div class="nav-links">
-            <a href="/catalog">Каталог</a>
-            <a href="/catalog?sort=newest">Новые</a>
-        </div>
-    </nav>
-
-    <section class="hero">
-        <div class="hero-grid"></div>
-        <div class="hero-content">
-            <h1>Каталог Telegram-каналов<br><span class="accent">организаций</span></h1>
-            <p class="hero-sub">{{ stats.total_orgs|default(0) }} каналов компаний и организаций</p>
-            <form class="search-hero" action="/catalog" method="GET">
-                <input type="text" name="q" placeholder="Поиск каналов..." autocomplete="off" id="search-input">
-                <button type="submit">Найти</button>
-            </form>
-            <div class="search-results-dropdown" id="search-dropdown"></div>
-        </div>
-    </section>
-
-    <section class="stats-section">
+    <div class="page-shell">
         <div class="container">
-            <div class="stats-grid">
+            <header class="hero">
+                <h1>TG-Catalog</h1>
+                <p>Каталог Telegram-каналов организаций и компаний</p>
+                <div class="hero-actions" style="margin-top: 20px;">
+                    <a class="btn" href="{{ url_for('catalog') }}">Открыть каталог</a>
+                </div>
+            </header>
+
+            <section class="stats-grid">
                 <div class="stat-card">
-                    <span class="stat-number">{{ stats.total_orgs|default(0) }}</span>
-                    <span class="stat-label">Организаций</span>
+                    <div class="stat-label">Всего каналов</div>
+                    <div class="stat-value">{{ total_channels }}</div>
                 </div>
                 <div class="stat-card">
-                    <span class="stat-number">{{ stats.total_all|default(0) }}</span>
-                    <span class="stat-label">Всего каналов</span>
+                    <div class="stat-label">Организаций</div>
+                    <div class="stat-value">{{ total_orgs }}</div>
                 </div>
                 <div class="stat-card">
-                    <span class="stat-number">{{ stats.categories|default([])|length }}</span>
-                    <span class="stat-label">Категорий</span>
+                    <div class="stat-label">Категорий</div>
+                    <div class="stat-value">{{ total_categories }}</div>
                 </div>
-            </div>
-        </div>
-    </section>
+            </section>
 
-    <section class="categories-section">
-        <div class="container">
-            <h2>Категории</h2>
-            <div class="categories-grid">
-                {% for cat in categories %}
-                <a href="/catalog?category={{ cat }}" class="cat-card">
-                    <span class="cat-icon">{{ icons.get(cat, '📁') }}</span>
-                    <span class="cat-name">{{ cat }}</span>
-                </a>
-                {% endfor %}
-            </div>
-        </div>
-    </section>
+            <section class="card">
+                <div class="section-title-row">
+                    <h2>Топ категорий</h2>
+                </div>
 
-    <section class="top-section">
-        <div class="container">
-            <h2>Топ каналов</h2>
-            <div class="channels-list">
-                {% for ch in top %}
-                <a href="/channel/{{ ch.username }}" class="channel-card">
-                    <div class="channel-rank">#{{ loop.index }}</div>
-                    <div class="channel-info">
-                        <div class="channel-title">{{ ch.title }}{% if ch.is_verified %}<span class="verified">✓</span>{% endif %}</div>
-                        <div class="channel-username">@{{ ch.username }}</div>
-                        <div class="channel-desc">{{ ch.description[:120] }}{% if ch.description|length > 120 %}...{% endif %}</div>
+                {% if top_categories %}
+                    <div class="tags">
+                        {% for category_name, cnt in top_categories %}
+                            <a class="tag" href="{{ url_for('catalog', category=category_name) }}">
+                                {{ category_name }} ({{ cnt }})
+                            </a>
+                        {% endfor %}
                     </div>
-                    <div class="channel-meta">
-                        <span class="channel-subs">{{ "{:,}".format(ch.subscribers) }}</span>
-                        <span class="channel-cat">{{ icons.get(ch.category, '') }} {{ ch.category }}</span>
+                {% else %}
+                    <p>Категории пока отсутствуют.</p>
+                {% endif %}
+            </section>
+
+            <section class="card">
+                <div class="section-title-row">
+                    <h2>Последние добавленные каналы</h2>
+                </div>
+
+                {% if latest_channels %}
+                    <div class="channel-list">
+                        {% for username, title, description, subscribers, category in latest_channels %}
+                            <article class="channel-card">
+                                <div class="channel-card-main">
+                                    <div class="channel-title-row">
+                                        <h3>
+                                            <a href="{{ url_for('channel_page', username=username) }}">
+                                                {{ title or username }}
+                                            </a>
+                                        </h3>
+
+                                        {% if category %}
+                                            <span class="channel-category">{{ category }}</span>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="channel-username">@{{ username }}</div>
+
+                                    {% if description %}
+                                        <p class="channel-description">{{ description }}</p>
+                                    {% endif %}
+                                </div>
+
+                                <div class="channel-card-side">
+                                    <div class="channel-stat-label">Подписчики</div>
+                                    <div class="channel-stat-value">{{ subscribers or 0 }}</div>
+                                </div>
+                            </article>
+                        {% endfor %}
                     </div>
-                </a>
-                {% endfor %}
-            </div>
-            <div class="center"><a href="/catalog" class="btn-primary">Все каналы →</a></div>
+                {% else %}
+                    <p>Каналы пока не найдены.</p>
+                {% endif %}
+            </section>
         </div>
-    </section>
-
-    <footer><div class="container"><p>📡 TG-Catalog</p></div></footer>
-
-    <script>
-        const input = document.getElementById('search-input');
-        const dropdown = document.getElementById('search-dropdown');
-        let timeout;
-        input?.addEventListener('input', () => {
-            clearTimeout(timeout);
-            const q = input.value.trim();
-            if (q.length < 2) { dropdown.innerHTML = ''; dropdown.style.display = 'none'; return; }
-            timeout = setTimeout(async () => {
-                const resp = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-                const data = await resp.json();
-                if (!data.length) { dropdown.style.display = 'none'; return; }
-                dropdown.innerHTML = data.map(ch => `
-                    <a href="/channel/${ch.username}" class="dropdown-item">
-                        <strong>${ch.title}</strong>
-                        <span>@${ch.username} · ${Number(ch.subscribers).toLocaleString()} подп.</span>
-                    </a>`).join('');
-                dropdown.style.display = 'block';
-            }, 300);
-        });
-        document.addEventListener('click', e => { if (!e.target.closest('.search-hero')) dropdown.style.display = 'none'; });
-    </script>
+    </div>
 </body>
 </html>

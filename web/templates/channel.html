@@ -1,39 +1,122 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ channel.title }} — TG-Catalog</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+    <title>{{ channel.title or channel.username }} — TG-Catalog</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <nav class="navbar">
-        <a href="/" class="nav-logo">📡 TG-Catalog</a>
-        <div class="nav-links"><a href="/catalog">Каталог</a></div>
-    </nav>
-    <section class="channel-detail">
+    <div class="page-shell">
         <div class="container">
-            <a href="/catalog" class="back-link">← Назад</a>
-            <div class="detail-card">
-                <div class="detail-header">
+            <header class="hero hero-compact">
+                <div class="hero-top">
                     <div>
-                        <h1>{{ channel.title }}{% if channel.is_verified %}<span class="verified">✓</span>{% endif %}</h1>
-                        <p class="detail-username">@{{ channel.username }}</p>
+                        <h1>{{ channel.title or channel.username }}</h1>
+                        <p>Карточка Telegram-канала</p>
                     </div>
-                    <a href="https://t.me/{{ channel.username }}" target="_blank" class="btn-primary">Открыть в Telegram →</a>
+                    <div class="hero-actions">
+                        <a class="btn btn-secondary" href="{{ url_for('catalog') }}">К каталогу</a>
+                        <a class="btn btn-secondary" href="{{ url_for('index') }}">На главную</a>
+                    </div>
                 </div>
-                <div class="detail-meta">
-                    <div class="meta-item"><span class="meta-label">Подписчики</span><span class="meta-value">{{ "{:,}".format(channel.subscribers) }}</span></div>
-                    <div class="meta-item"><span class="meta-label">Категория</span><span class="meta-value">{{ icons.get(channel.category, '') }} {{ channel.category }}</span></div>
-                    <div class="meta-item"><span class="meta-label">Добавлен</span><span class="meta-value">{{ channel.created_at[:10] }}</span></div>
+            </header>
+
+            <section class="channel-card">
+                <div class="channel-card-main">
+                    <div class="channel-title-row">
+                        <h3>{{ channel.title or channel.username }}</h3>
+
+                        {% if channel.category %}
+                            <span class="channel-category">{{ channel.category }}</span>
+                        {% endif %}
+
+                        {% if channel.is_organization %}
+                            <span class="channel-category">Организация</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="channel-username">
+                        <a href="https://t.me/{{ channel.username }}" target="_blank" rel="noopener noreferrer">
+                            @{{ channel.username }}
+                        </a>
+                    </div>
+
+                    {% if channel.description %}
+                        <p class="channel-description">{{ channel.description }}</p>
+                    {% else %}
+                        <p class="channel-description">Описание отсутствует.</p>
+                    {% endif %}
                 </div>
-                {% if channel.description %}
-                <div class="detail-description"><h3>Описание</h3><p>{{ channel.description }}</p></div>
-                {% endif %}
-            </div>
+
+                <div class="channel-card-side">
+                    <div class="channel-stat-label">Подписчики</div>
+                    <div class="channel-stat-value">{{ channel.subscribers or 0 }}</div>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="section-title-row">
+                    <h2>Информация</h2>
+                </div>
+
+                <div class="details-grid">
+                    <div class="detail-item">
+                        <div class="detail-label">Username</div>
+                        <div class="detail-value">@{{ channel.username }}</div>
+                    </div>
+
+                    <div class="detail-item">
+                        <div class="detail-label">Категория</div>
+                        <div class="detail-value">{{ channel.category or 'Без категории' }}</div>
+                    </div>
+
+                    <div class="detail-item">
+                        <div class="detail-label">Источник</div>
+                        <div class="detail-value">{{ channel.source or 'Не указан' }}</div>
+                    </div>
+
+                    <div class="detail-item">
+                        <div class="detail-label">Найдено через</div>
+                        <div class="detail-value">{{ channel.found_via or 'Не указано' }}</div>
+                    </div>
+
+                    <div class="detail-item">
+                        <div class="detail-label">Тип</div>
+                        <div class="detail-value">
+                            {% if channel.is_organization %}
+                                Организация
+                            {% else %}
+                                Канал
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="detail-item">
+                        <div class="detail-label">Проверено</div>
+                        <div class="detail-value">
+                            {% if channel.reviewed %}
+                                Да
+                            {% else %}
+                                Нет
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="section-title-row">
+                    <h2>Ссылка</h2>
+                </div>
+
+                <p class="channel-description">
+                    <a href="https://t.me/{{ channel.username }}" target="_blank" rel="noopener noreferrer">
+                        Открыть канал в Telegram
+                    </a>
+                </p>
+            </section>
         </div>
-    </section>
+    </div>
 </body>
 </html>

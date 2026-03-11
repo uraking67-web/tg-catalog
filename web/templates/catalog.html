@@ -1,69 +1,121 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Каталог — TG-Catalog</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <nav class="navbar">
-        <a href="/" class="nav-logo">📡 TG-Catalog</a>
-        <div class="nav-links"><a href="/catalog" class="active">Каталог</a></div>
-    </nav>
-
-    <section class="catalog-header">
+    <div class="page-shell">
         <div class="container">
-            <h1>{% if query %}Результаты: «{{ query }}»{% elif category %}{{ icons.get(category, '') }} {{ category }}{% else %}Все каналы{% endif %}</h1>
-            <p>Найдено: {{ total }}</p>
-            <div class="filters">
-                <form class="search-bar" action="/catalog" method="GET">
-                    <input type="text" name="q" value="{{ query }}" placeholder="Поиск...">
-                    <button type="submit">Найти</button>
-                </form>
-                <div class="filter-tags">
-                    <a href="/catalog" class="tag {% if not category and not query %}active{% endif %}">Все</a>
-                    {% for cat in categories %}
-                    <a href="/catalog?category={{ cat }}" class="tag {% if category == cat %}active{% endif %}">{{ icons.get(cat, '') }} {{ cat }}</a>
-                    {% endfor %}
+            <header class="hero hero-compact">
+                <div class="hero-top">
+                    <div>
+                        <h1>Каталог каналов</h1>
+                        <p>Telegram-каналы организаций и компаний</p>
+                    </div>
+                    <a class="btn btn-secondary" href="{{ url_for('index') }}">На главную</a>
                 </div>
-            </div>
-        </div>
-    </section>
 
-    <section class="catalog-list">
-        <div class="container">
-            {% if channels %}
-            <div class="channels-list">
-                {% for ch in channels %}
-                <a href="/channel/{{ ch.username }}" class="channel-card">
-                    <div class="channel-info">
-                        <div class="channel-title">{{ ch.title }}{% if ch.is_verified %}<span class="verified">✓</span>{% endif %}</div>
-                        <div class="channel-username">@{{ ch.username }}</div>
-                        <div class="channel-desc">{{ ch.description[:150] }}{% if ch.description|length > 150 %}...{% endif %}</div>
+                <form method="get" action="{{ url_for('catalog') }}" class="filters-form">
+                    <div class="filters-grid">
+                        <input
+                            type="text"
+                            name="q"
+                            value="{{ q }}"
+                            placeholder="Поиск по названию, username или описанию"
+                            class="input"
+                        >
+
+                        <select name="category" class="select">
+                            <option value="">Все категории</option>
+                            {% for cat in categories %}
+                                <option value="{{ cat }}" {% if cat == current_category %}selected{% endif %}>
+                                    {{ cat }}
+                                </option>
+                            {% endfor %}
+                        </select>
+
+                        <button type="submit" class="btn">Найти</button>
                     </div>
-                    <div class="channel-meta">
-                        <span class="channel-subs">{{ "{:,}".format(ch.subscribers) }}</span>
-                        <span class="channel-cat">{{ icons.get(ch.category, '') }} {{ ch.category }}</span>
+                </form>
+
+                <div class="catalog-summary">
+                    <span>Найдено каналов:</span>
+                    <strong>{{ total }}</strong>
+                </div>
+            </header>
+
+            <section class="channel-list">
+                {% if channels %}
+                    {% for username, title, description, subscribers, category in channels %}
+                        <article class="channel-card">
+                            <div class="channel-card-main">
+                                <div class="channel-title-row">
+                                    <h3>
+                                        <a href="{{ url_for('channel_page', username=username) }}">
+                                            {{ title or username }}
+                                        </a>
+                                    </h3>
+                                    {% if category %}
+                                        <span class="channel-category">{{ category }}</span>
+                                    {% endif %}
+                                </div>
+
+                                <div class="channel-username">
+                                    <a href="{{ url_for('channel_page', username=username) }}">@{{ username }}</a>
+                                </div>
+
+                                {% if description %}
+                                    <p class="channel-description">{{ description }}</p>
+                                {% endif %}
+                            </div>
+
+                            <div class="channel-card-side">
+                                <div class="channel-stat-label">Подписчики</div>
+                                <div class="channel-stat-value">{{ subscribers or 0 }}</div>
+                            </div>
+                        </article>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-card">
+                        <h3>Ничего не найдено</h3>
+                        <p>Попробуй изменить запрос или сбросить фильтр категории.</p>
                     </div>
-                </a>
-                {% endfor %}
-            </div>
+                {% endif %}
+            </section>
+
             {% if total_pages > 1 %}
-            <div class="pagination">
-                {% if page > 1 %}<a href="/catalog?page={{ page-1 }}&sort={{ sort }}&category={{ category }}&q={{ query }}" class="page-link">← Назад</a>{% endif %}
-                <span class="page-link current">{{ page }} / {{ total_pages }}</span>
-                {% if page < total_pages %}<a href="/catalog?page={{ page+1 }}&sort={{ sort }}&category={{ category }}&q={{ query }}" class="page-link">Далее →</a>{% endif %}
-            </div>
-            {% endif %}
-            {% else %}
-            <div class="empty-state"><h3>🔍 Ничего не найдено</h3></div>
+                <section class="pagination">
+                    {% if page > 1 %}
+                        <a
+                            class="btn btn-secondary"
+                            href="{{ url_for('catalog', q=q, category=current_category, page=page-1) }}"
+                        >
+                            ← Назад
+                        </a>
+                    {% else %}
+                        <span></span>
+                    {% endif %}
+
+                    <div class="pagination-info">
+                        Страница <strong>{{ page }}</strong> из <strong>{{ total_pages }}</strong>
+                    </div>
+
+                    {% if page < total_pages %}
+                        <a
+                            class="btn btn-secondary"
+                            href="{{ url_for('catalog', q=q, category=current_category, page=page+1) }}"
+                        >
+                            Вперёд →
+                        </a>
+                    {% else %}
+                        <span></span>
+                    {% endif %}
+                </section>
             {% endif %}
         </div>
-    </section>
-
-    <footer><div class="container"><p>📡 TG-Catalog</p></div></footer>
+    </div>
 </body>
 </html>

@@ -1,96 +1,161 @@
-"""
-Сайт-каталог Telegram-каналов организаций
-"""
-
 import os
-import sys
-import math
+from math import ceil
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, abort, render_template, request
 from dotenv import load_dotenv
-from database import (
-    get_all_channels, search_channels, get_channels_by_category,
-    get_stats, get_top_channels, get_db, CATEGORIES
-)
 
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
+from database import get_channel_by_username, get_db, init_db
 
-app = Flask(__name__)
-PER_PAGE = 30
+load_dotenv()
 
-ICONS = {
-    "IT и технологии": "💻", "Бизнес и финансы": "🏢", "Медиа и СМИ": "📰",
-    "Госорганы": "🏛", "Образование": "🎓", "Медицина": "🏥",
-    "Ритейл и e-commerce": "🛒", "Промышленность": "🏭",
-    "Юридические услуги": "⚖️", "Другое": "🎨",
-}
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TEMPLATES_DIR = os.path.join(BASE_DIR, "web", "templates")
+STATIC_DIR = os.path.join(BASE_DIR, "web", "static")
+
+app = Flask(__name__, template_folder=TEMPLATES_DIR, static_folder=STATIC_DIR)
+
+PER_PAGE = 24
+
+
+def fetch_scalar(query: str, params: tuple = ()) -> int:
+    conn = get_db()
+    try:
+        row = conn.execute(query, params).fetchone()
+        return row[0] if row else 0
+    finally:
+        conn.close()
+
+
+def fetch_all(query: str, params: tuple = ()) -> list:
+    conn = get_db()
+    try:
+        rows = conn.execute(query, params).fetchall()
+        return rows
+    finally:
+        conn.close()
 
 
 @app.route("/")
 def index():
-    stats = get_stats()
-    top = get_top_channels(10)
-    cats = list(CATEGORIES.keys()) + ["Другое"]
-    return render_template("index.html", stats=stats, top=top, categories=cats, icons=ICONS)
+    total_channels = fetch_scalar("SELECT COUNT(*) FROM channels")
+    total_orgs = fetch_scalar("SELECT COUNT(*) FROM channels WHERE is_organization = 1")
+    total_categories = fetch_scalar(
+        "SELECT COUNT(DISTINCT category) FROM channels WHERE category IS NOT NULL AND TRIM(category) != ''"
+    )
+
+    top_categories = fetch_all(
+        """
+        SELECT
+            COALESCE(NULLIF(TRIM(category), ''), 'Без категории') AS category_name,
+            COUNT(*) AS cnt
+        FROM channels
+        WHERE is_organization = 1
+        GROUP BY category_name
+        ORDER BY cnt DESC, category_name ASC
+        LIMIT 12
+        """
+    )
+
+    latest_channels = fetch_all(
+        """
+        SELECT username, title, description, subscribers, category
+        FROM channels
+        WHERE is_organization = 1
+        ORDER BY id DESC
+        LIMIT 12
+        """
+    )
+
+    stats = {
+        "total_channels": total_channels,
+        "organizations": total_orgs,
+        "categories": total_categories,
+    }
+
+    return render_template(
+        "index.html",
+        stats=stats,
+        total_channels=total_channels,
+        total_orgs=total_orgs,
+        total_categories=total_categories,
+        top_categories=top_categories,
+        latest_channels=latest_channels,
+    )
 
 
 @app.route("/catalog")
 def catalog():
-    page = request.args.get("page", 1, type=int)
-    sort = request.args.get("sort", "subscribers")
-    category = request.args.get("category", "")
-    query = request.args.get("q", "")
+    search = request.args.get("q", "").strip()
+    category = request.args.get("category", "").strip()
+    page = max(request.args.get("page", default=1, type=int), 1)
+
+    where = ["is_organization = 1"]
+    params = []
+
+    if search:
+        where.append("(title LIKE ? OR username LIKE ? OR description LIKE ?)")
+        search_like = f"%{search}%"
+        params.extend([search_like, search_like, search_like])
+
+    if category:
+        where.append("category = ?")
+        params.append(category)
+
+    where_sql = " AND ".join(where)
+
+    total = fetch_scalar(f"SELECT COUNT(*) FROM channels WHERE {where_sql}", tuple(params))
+    total_pages = max(ceil(total / PER_PAGE), 1)
+    page = min(page, total_pages)
     offset = (page - 1) * PER_PAGE
 
-    if query:
-        channels = search_channels(query, limit=PER_PAGE, offset=offset)
-        conn = get_db()
-        total = conn.execute(
-            "SELECT COUNT(*) FROM channels WHERE (title LIKE ? OR description LIKE ? OR username LIKE ?) AND is_organization=1",
-            (f"%{query}%", f"%{query}%", f"%{query}%")).fetchone()[0]
-        conn.close()
-    elif category:
-        channels = get_channels_by_category(category, limit=PER_PAGE, offset=offset)
-        conn = get_db()
-        total = conn.execute("SELECT COUNT(*) FROM channels WHERE category=? AND is_organization=1", (category,)).fetchone()[0]
-        conn.close()
-    else:
-        channels = get_all_channels(limit=PER_PAGE, offset=offset, sort=sort)
-        conn = get_db()
-        total = conn.execute("SELECT COUNT(*) FROM channels WHERE is_organization=1").fetchone()[0]
-        conn.close()
+    rows = fetch_all(
+        f"""
+        SELECT username, title, description, subscribers, category
+        FROM channels
+        WHERE {where_sql}
+        ORDER BY subscribers DESC, title ASC
+        LIMIT ? OFFSET ?
+        """,
+        tuple(params + [PER_PAGE, offset]),
+    )
 
-    total_pages = math.ceil(total / PER_PAGE) if total else 1
-    cats = list(CATEGORIES.keys()) + ["Другое"]
-    return render_template("catalog.html", channels=channels, page=page, total_pages=total_pages,
-                           total=total, sort=sort, category=category, query=query, categories=cats, icons=ICONS)
+    categories = fetch_all(
+        """
+        SELECT DISTINCT category
+        FROM channels
+        WHERE is_organization = 1
+          AND category IS NOT NULL
+          AND TRIM(category) != ''
+        ORDER BY category ASC
+        """
+    )
+
+    return render_template(
+        "catalog.html",
+        channels=rows,
+        categories=[row[0] for row in categories],
+        current_category=category,
+        q=search,
+        page=page,
+        total_pages=total_pages,
+        total=total,
+    )
 
 
 @app.route("/channel/<username>")
-def channel_detail(username):
-    conn = get_db()
-    ch = conn.execute("SELECT * FROM channels WHERE username=?", (username,)).fetchone()
-    conn.close()
-    if not ch:
-        return render_template("404.html"), 404
-    return render_template("channel.html", channel=dict(ch), icons=ICONS)
+def channel_page(username: str):
+    channel = get_channel_by_username(username)
+    if not channel:
+        abort(404)
+    return render_template("channel.html", channel=channel)
 
 
-@app.route("/api/search")
-def api_search():
-    q = request.args.get("q", "")
-    if len(q) < 2:
-        return jsonify([])
-    results = search_channels(q, limit=10)
-    return jsonify([{"username": r["username"], "title": r["title"],
-                     "subscribers": r["subscribers"], "category": r["category"]} for r in results])
+@app.errorhandler(404)
+def not_found(_error):
+    return render_template("404.html"), 404
 
 
 if __name__ == "__main__":
-    host = os.getenv("FLASK_HOST", "0.0.0.0")
-    port = int(os.getenv("FLASK_PORT", "5000"))
-    debug = os.getenv("FLASK_DEBUG", "true").lower() == "true"
-    print(f"🌐 Сайт: http://{host}:{port}")
-    app.run(host=host, port=port, debug=debug)
+    init_db()
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)

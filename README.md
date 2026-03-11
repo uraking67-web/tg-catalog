@@ -1,50 +1,26 @@
-# TG-Catalog — Каталог Telegram-каналов организаций
+# TG-Catalog
 
-## Быстрый старт
+Каталог Telegram-каналов организаций и компаний.
 
-### 1. Установи зависимости
-```
+## Что умеет проект
+
+- собирать каналы через Telegram API (`parser/crawler.py`)
+- парсить внешние каталоги и сохранять результат в Excel (`parser/parse_catalogs.py`)
+- импортировать Excel в базу (`parser/import_from_excel.py`)
+- показывать каталог через Flask (`web/app.py`)
+- запускать Telegram-бота (`bot/bot.py`)
+
+## Структура проекта
+
+- `web/` — сайт
+- `parser/` — парсеры и импорт
+- `bot/` — Telegram-бот
+- `data/` — SQLite база
+- `database.py` — работа с базой
+
+## Локальный запуск
+
+### 1. Установить зависимости
+
+```bash
 pip install -r requirements.txt
-```
-
-### 2. Заполни seeds.txt
-Открой `parser/seeds.txt` и впиши реальные username каналов (без @), по одному на строку.
-
-### 3. Запусти парсер
-```
-cd parser
-python crawler.py
-```
-При первом запуске введи код из Telegram.
-
-### 4. Запусти сайт
-```
-cd web
-python app.py
-```
-Открой http://localhost:5000
-
-### 5. Запусти бота
-```
-cd bot
-python bot.py
-```
-
-## Структура
-```
-tg-catalog/
-├── .env              ← Твои креды (уже заполнен!)
-├── database.py       ← Общая БД
-├── parser/
-│   ├── config.py     ← Конфиг
-│   ├── crawler.py    ← Парсер
-│   └── seeds.txt     ← Стартовые каналы
-├── web/
-│   ├── app.py        ← Flask-сайт
-│   ├── static/       ← CSS
-│   └── templates/    ← HTML
-├── bot/
-│   └── bot.py        ← Telegram-бот
-└── data/
-    └── catalog.db    ← SQLite (создаётся сам)
-```
