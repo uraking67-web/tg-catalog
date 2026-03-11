@@ -1,0 +1,7 @@
+telethon==1.36.0
+flask==3.1.0
+python-dotenv==1.0.1
+aiohttp==3.11.11
+aiogram==3.15.0
+aiosqlite==0.20.0
+Pillow==11.1.0

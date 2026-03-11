@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ channel.title }} — TG-Catalog</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-logo">📡 TG-Catalog</a>
+        <div class="nav-links"><a href="/catalog">Каталог</a></div>
+    </nav>
+    <section class="channel-detail">
+        <div class="container">
+            <a href="/catalog" class="back-link">← Назад</a>
+            <div class="detail-card">
+                <div class="detail-header">
+                    <div>
+                        <h1>{{ channel.title }}{% if channel.is_verified %}<span class="verified">✓</span>{% endif %}</h1>
+                        <p class="detail-username">@{{ channel.username }}</p>
+                    </div>
+                    <a href="https://t.me/{{ channel.username }}" target="_blank" class="btn-primary">Открыть в Telegram →</a>
+                </div>
+                <div class="detail-meta">
+                    <div class="meta-item"><span class="meta-label">Подписчики</span><span class="meta-value">{{ "{:,}".format(channel.subscribers) }}</span></div>
+                    <div class="meta-item"><span class="meta-label">Категория</span><span class="meta-value">{{ icons.get(channel.category, '') }} {{ channel.category }}</span></div>
+                    <div class="meta-item"><span class="meta-label">Добавлен</span><span class="meta-value">{{ channel.created_at[:10] }}</span></div>
+                </div>
+                {% if channel.description %}
+                <div class="detail-description"><h3>Описание</h3><p>{{ channel.description }}</p></div>
+                {% endif %}
+            </div>
+        </div>
+    </section>
+</body>
+</html>

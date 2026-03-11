@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Каталог — TG-Catalog</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Unbounded:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-logo">📡 TG-Catalog</a>
+        <div class="nav-links"><a href="/catalog" class="active">Каталог</a></div>
+    </nav>
+
+    <section class="catalog-header">
+        <div class="container">
+            <h1>{% if query %}Результаты: «{{ query }}»{% elif category %}{{ icons.get(category, '') }} {{ category }}{% else %}Все каналы{% endif %}</h1>
+            <p>Найдено: {{ total }}</p>
+            <div class="filters">
+                <form class="search-bar" action="/catalog" method="GET">
+                    <input type="text" name="q" value="{{ query }}" placeholder="Поиск...">
+                    <button type="submit">Найти</button>
+                </form>
+                <div class="filter-tags">
+                    <a href="/catalog" class="tag {% if not category and not query %}active{% endif %}">Все</a>
+                    {% for cat in categories %}
+                    <a href="/catalog?category={{ cat }}" class="tag {% if category == cat %}active{% endif %}">{{ icons.get(cat, '') }} {{ cat }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="catalog-list">
+        <div class="container">
+            {% if channels %}
+            <div class="channels-list">
+                {% for ch in channels %}
+                <a href="/channel/{{ ch.username }}" class="channel-card">
+                    <div class="channel-info">
+                        <div class="channel-title">{{ ch.title }}{% if ch.is_verified %}<span class="verified">✓</span>{% endif %}</div>
+                        <div class="channel-username">@{{ ch.username }}</div>
+                        <div class="channel-desc">{{ ch.description[:150] }}{% if ch.description|length > 150 %}...{% endif %}</div>
+                    </div>
+                    <div class="channel-meta">
+                        <span class="channel-subs">{{ "{:,}".format(ch.subscribers) }}</span>
+                        <span class="channel-cat">{{ icons.get(ch.category, '') }} {{ ch.category }}</span>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% if total_pages > 1 %}
+            <div class="pagination">
+                {% if page > 1 %}<a href="/catalog?page={{ page-1 }}&sort={{ sort }}&category={{ category }}&q={{ query }}" class="page-link">← Назад</a>{% endif %}
+                <span class="page-link current">{{ page }} / {{ total_pages }}</span>
+                {% if page < total_pages %}<a href="/catalog?page={{ page+1 }}&sort={{ sort }}&category={{ category }}&q={{ query }}" class="page-link">Далее →</a>{% endif %}
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="empty-state"><h3>🔍 Ничего не найдено</h3></div>
+            {% endif %}
+        </div>
+    </section>
+
+    <footer><div class="container"><p>📡 TG-Catalog</p></div></footer>
+</body>
+</html>
