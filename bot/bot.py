@@ -1,124 +1,170 @@
-"""
-Telegram-бот каталога каналов организаций
-"""
-
 import asyncio
 import os
 import sys
+from pathlib import Path
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message
-from aiogram.filters import Command
+from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.filters import CommandStart, Command
+from aiogram.types import Message
+from dotenv import load_dotenv
 
-from database import search_channels, get_stats, get_top_channels, get_db, CATEGORIES, init_db
+BASE_DIR = Path(__file__).resolve().parents[1]
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
-load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
-BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+load_dotenv(BASE_DIR / ".env", override=True)
+print("BASE_DIR =", BASE_DIR)
+print("ENV_FILE =", BASE_DIR / ".env")
+print("BOT_TOKEN_PREFIX =", os.getenv("BOT_TOKEN", "")[:20])
 
-bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
+from database import search_channels, get_stats, get_top_channels, init_db  # noqa: E402
+
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+
+if not BOT_TOKEN:
+    raise ValueError("В .env не найден BOT_TOKEN")
+
+bot = Bot(
+    token=BOT_TOKEN,
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+)
 dp = Dispatcher()
 
-ICONS = {
-    "IT и технологии": "💻", "Бизнес и финансы": "🏢", "Медиа и СМИ": "📰",
-    "Госорганы": "🏛", "Образование": "🎓", "Медицина": "🏥",
-    "Ритейл и e-commerce": "🛒", "Промышленность": "🏭",
-    "Юридические услуги": "⚖️", "Другое": "🎨",
-}
+
+def format_channel(channel: dict) -> str:
+    title = channel.get("title") or channel.get("username") or "Без названия"
+    username = channel.get("username") or ""
+    category = channel.get("category") or "Без категории"
+    subscribers = channel.get("subscribers") or 0
+    description = (channel.get("description") or "").strip()
+
+    text = [
+        f"<b>{title}</b>",
+        f"@{username}",
+        f"Категория: {category}",
+        f"Подписчики: {subscribers}",
+    ]
+
+    if description:
+        short_desc = description[:300]
+        if len(description) > 300:
+            short_desc += "..."
+        text.append("")
+        text.append(short_desc)
+
+    return "\n".join(text)
 
 
-def fmt(n):
-    if n >= 1_000_000: return f"{n/1_000_000:.1f}M"
-    if n >= 1_000: return f"{n/1_000:.1f}K"
-    return str(n)
-
-
-@dp.message(Command("start"))
-async def cmd_start(msg: Message):
-    await msg.answer(
-        "📡 <b>TG-Catalog Bot</b>\n\n"
-        "🔍 /search &lt;запрос&gt; — поиск\n"
-        "➕ /add &lt;@username&gt; — предложить канал\n"
-        "📊 /stats — статистика\n"
-        "🏆 /top — топ-10\n"
-        "📂 /categories — категории"
+@dp.message(CommandStart())
+async def cmd_start(message: Message):
+    text = (
+        "<b>TG-Catalog Bot</b>\n\n"
+        "Команды:\n"
+        "/start — старт\n"
+        "/help — помощь\n"
+        "/stats — статистика\n"
+        "/top — топ каналов\n"
+        "/find <запрос> — поиск каналов\n\n"
+        "Пример:\n"
+        "<code>/find ozon</code>"
     )
+    await message.answer(text)
 
 
-@dp.message(Command("search"))
-async def cmd_search(msg: Message):
-    q = msg.text.replace("/search", "").strip()
-    if not q:
-        await msg.answer("🔍 Укажи запрос: <code>/search банк</code>")
-        return
-    results = search_channels(q, limit=10)
-    if not results:
-        await msg.answer(f"😔 По «{q}» ничего не найдено")
-        return
-    text = f"🔍 «{q}»:\n\n"
-    for i, ch in enumerate(results, 1):
-        text += f"{i}. <b>{ch['title']}</b>\n   @{ch['username']} · {fmt(ch['subscribers'])} подп.\n   {ICONS.get(ch['category'], '📁')} {ch['category']}\n\n"
-    await msg.answer(text)
-
-
-@dp.message(Command("add"))
-async def cmd_add(msg: Message):
-    username = msg.text.replace("/add", "").strip().lstrip("@")
-    if not username:
-        await msg.answer("➕ Укажи: <code>/add @channel</code>")
-        return
-    conn = get_db()
-    if conn.execute("SELECT id FROM channels WHERE username=?", (username,)).fetchone():
-        await msg.answer(f"✅ @{username} уже в каталоге!")
-        conn.close()
-        return
-    try:
-        conn.execute("INSERT INTO user_submissions (username, submitted_by) VALUES (?, ?)", (username, msg.from_user.id))
-        conn.commit()
-        await msg.answer(f"📝 @{username} отправлен на модерацию!")
-    except:
-        await msg.answer(f"⚠️ @{username} уже в очереди")
-    finally:
-        conn.close()
+@dp.message(Command("help"))
+async def cmd_help(message: Message):
+    text = (
+        "<b>Доступные команды</b>\n\n"
+        "/stats — общая статистика\n"
+        "/top — топ каналов по подписчикам\n"
+        "/find <запрос> — поиск по названию, username и описанию\n\n"
+        "Пример:\n"
+        "<code>/find банк</code>"
+    )
+    await message.answer(text)
 
 
 @dp.message(Command("stats"))
-async def cmd_stats(msg: Message):
-    s = get_stats()
-    text = f"📊 <b>Статистика</b>\n\n🏢 Организаций: <b>{s['total_orgs']}</b>\n📡 Всего: <b>{s['total_all']}</b>\n\n"
-    for c in s["categories"]:
-        text += f"  {ICONS.get(c['category'], '📁')} {c['category']}: {c['cnt']}\n"
-    await msg.answer(text)
+async def cmd_stats(message: Message):
+    stats = get_stats()
+    text = (
+        "<b>Статистика каталога</b>\n\n"
+        f"Всего каналов: <b>{stats['total_channels']}</b>\n"
+        f"Организаций: <b>{stats['organizations']}</b>\n"
+        f"Категорий: <b>{stats['categories']}</b>"
+    )
+    await message.answer(text)
 
 
 @dp.message(Command("top"))
-async def cmd_top(msg: Message):
-    channels = get_top_channels(10)
+async def cmd_top(message: Message):
+    channels = get_top_channels(limit=10)
+
     if not channels:
-        await msg.answer("📭 Каталог пуст — запусти парсер!")
+        await message.answer("Топ пока пуст.")
         return
-    text = "🏆 <b>Топ-10</b>\n\n"
-    for i, ch in enumerate(channels, 1):
-        medal = ["🥇", "🥈", "🥉"][i-1] if i <= 3 else f"{i}."
-        text += f"{medal} <b>{ch['title']}</b>\n    @{ch['username']} · {fmt(ch['subscribers'])}\n\n"
-    await msg.answer(text)
+
+    parts = ["<b>Топ каналов</b>\n"]
+    for i, channel in enumerate(channels, start=1):
+        title = channel.get("title") or channel.get("username") or "Без названия"
+        username = channel.get("username") or ""
+        subscribers = channel.get("subscribers") or 0
+        parts.append(f"{i}. <b>{title}</b> — @{username} — {subscribers}")
+
+    await message.answer("\n".join(parts))
 
 
-@dp.message(Command("categories"))
-async def cmd_cats(msg: Message):
-    s = get_stats()
-    text = "📂 <b>Категории</b>\n\n"
-    for c in s["categories"]:
-        text += f"{ICONS.get(c['category'], '📁')} {c['category']} — {c['cnt']}\n"
-    await msg.answer(text)
+@dp.message(Command("find"))
+async def cmd_find(message: Message):
+    text = (message.text or "").strip()
+    parts = text.split(maxsplit=1)
+
+    if len(parts) < 2 or not parts[1].strip():
+        await message.answer("Использование: <code>/find ваш_запрос</code>")
+        return
+
+    query = parts[1].strip()
+    results = search_channels(query=query, limit=10)
+
+    if not results:
+        await message.answer(f"По запросу <b>{query}</b> ничего не найдено.")
+        return
+
+    messages = [f"<b>Результаты поиска:</b> {query}\n"]
+    for channel in results:
+        messages.append(format_channel(channel))
+        messages.append("")
+
+    await message.answer("\n".join(messages[:50]))
+
+
+@dp.message(F.text)
+async def fallback_search(message: Message):
+    query = (message.text or "").strip()
+    if not query:
+        return
+
+    results = search_channels(query=query, limit=5)
+
+    if not results:
+        await message.answer("Ничего не найдено. Попробуй команду /find запрос")
+        return
+
+    parts = [f"<b>Найдено по запросу:</b> {query}\n"]
+    for channel in results:
+        parts.append(format_channel(channel))
+        parts.append("")
+
+    await message.answer("\n".join(parts[:40]))
 
 
 async def main():
     init_db()
-    print("🤖 Бот запущен!")
+    await bot.delete_webhook(drop_pending_updates=True)
+    me = await bot.get_me()
+    print(f"🤖 Бот запущен: @{me.username} | id={me.id}")
     await dp.start_polling(bot)
 
 

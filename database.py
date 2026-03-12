@@ -1,7 +1,7 @@
 import os
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 
@@ -10,6 +10,21 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_DB_PATH = BASE_DIR / "data" / "catalog.db"
 DB_PATH = Path(os.getenv("DATABASE_PATH", str(DEFAULT_DB_PATH)))
+
+CATEGORIES = [
+    "Бизнес и финансы",
+    "IT и технологии",
+    "Медиа и СМИ",
+    "Образование",
+    "Медицина",
+    "Ритейл и e-commerce",
+    "Государственные организации",
+    "Производство",
+    "Логистика и транспорт",
+    "Недвижимость",
+    "Маркетинг и PR",
+    "Другое",
+]
 
 
 def ensure_db_dir() -> None:
@@ -164,6 +179,98 @@ def get_channel_by_username(username: str) -> Optional[Dict[str, Any]]:
             (username,),
         ).fetchone()
         return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def search_channels(query: str = "", category: str = "", limit: int = 20) -> List[Dict[str, Any]]:
+    conn = get_db()
+    try:
+        where = ["is_organization = 1"]
+        params: List[Any] = []
+
+        query = (query or "").strip()
+        category = (category or "").strip()
+
+        if query:
+            like = f"%{query}%"
+            where.append("(title LIKE ? OR username LIKE ? OR description LIKE ?)")
+            params.extend([like, like, like])
+
+        if category:
+            where.append("category = ?")
+            params.append(category)
+
+        where_sql = " AND ".join(where)
+
+        rows = conn.execute(
+            f"""
+            SELECT *
+            FROM channels
+            WHERE {where_sql}
+            ORDER BY subscribers DESC, title ASC
+            LIMIT ?
+            """,
+            (*params, limit),
+        ).fetchall()
+
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def get_top_channels(limit: int = 10) -> List[Dict[str, Any]]:
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM channels
+            WHERE is_organization = 1
+            ORDER BY subscribers DESC, title ASC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def get_stats() -> Dict[str, Any]:
+    conn = get_db()
+    try:
+        total_channels = conn.execute("SELECT COUNT(*) FROM channels").fetchone()[0]
+        total_orgs = conn.execute(
+            "SELECT COUNT(*) FROM channels WHERE is_organization = 1"
+        ).fetchone()[0]
+        total_categories = conn.execute(
+            """
+            SELECT COUNT(DISTINCT category)
+            FROM channels
+            WHERE category IS NOT NULL AND TRIM(category) != ''
+            """
+        ).fetchone()[0]
+
+        top_categories = conn.execute(
+            """
+            SELECT
+                COALESCE(NULLIF(TRIM(category), ''), 'Без категории') AS category_name,
+                COUNT(*) AS cnt
+            FROM channels
+            WHERE is_organization = 1
+            GROUP BY category_name
+            ORDER BY cnt DESC, category_name ASC
+            LIMIT 10
+            """
+        ).fetchall()
+
+        return {
+            "total_channels": total_channels,
+            "organizations": total_orgs,
+            "categories": total_categories,
+            "top_categories": [dict(row) for row in top_categories],
+        }
     finally:
         conn.close()
 
